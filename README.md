@@ -2,6 +2,8 @@
 
 This repository documents several regressions encountered while working with Effect RPC.
 
+You can start the development server using `bun dev`.
+
 Of specific interest are the following directories:
 * `src/rpc` - houses all RPC implementations
 * `routes/api/rpc.ts` - redirects HTTP requests
