@@ -1,74 +1,80 @@
-# [TanStarter](https://github.com/dotnize/tanstarter)
+# Effect RPC Regressions
 
-A minimal starter template for 🏝️ TanStack Start.
+This repository documents several regressions encountered while working with Effect RPC.
 
-- [React 19](https://react.dev) + [React Compiler](https://react.dev/learn/react-compiler)
-- TanStack [Start](https://tanstack.com/start/latest) + [Router](https://tanstack.com/router/latest) + [Query](https://tanstack.com/query/latest)
-- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
-- [Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL
-- [Better Auth](https://www.better-auth.com/)
+Of specific interest are the following directories:
+* `src/rpc` - houses all RPC implementations
+* `routes/api/rpc.ts` - redirects HTTP requests
+* `routes/index.ts` - calls all RPC implementations
 
-## Getting Started
+The repository implements three clients, each exhibiting different erroneous behavior:
+* `client.fake.ts` - utilizes `RpcTest` to simulate RPC calls without server round-trips
+* `client.http.ts` - implements HTTP connectivity
+* `client.websocket.ts` - implements WebSocket connectivity
 
-1. [Use this template](https://github.com/new?template_name=tanstarter&template_owner=dotnize) or clone this repository.
+Two server implementations are provided:
+* `server.http.ts` - initializes a web handler for nitro integration
+* `server.websocket.ts` - initializes a WebSocket handler called in `src/ssr.tsx` to start a background server
 
-2. Install dependencies:
+## Scenario 1: Fake Client
 
-   ```bash
-   pnpm install # npm install
-   ```
+The fake client produces the following error during execution:
 
-3. Create a `.env` file based on [`.env.example`](./.env.example).
+```
+[10:44:05.366] DEBUG (#7): Fiber terminated with an unhandled error
+TypeError: undefined is not an object (evaluating 'fiber.unsafePoll')
+    at resume ([...]/node_modules/@effect/rpc/dist/esm/RpcClient.js:115:16)
+    at write ([...]/node_modules/@effect/rpc/dist/esm/RpcClient.js:243:19)
+    at runLoop ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:1129:34)
+    at evaluateEffect ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:733:27)
+    at start ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:786:14)
+    at <anonymous> ([...]/node_modules/effect/dist/esm/internal/runtime.js:59:18)
+    at handleRequest ([...]/node_modules/@effect/rpc/dist/esm/RpcServer.js:209:27)
+    at runLoop ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:1129:34)
+    at evaluateEffect ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:733:27)
+    at start ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:786:14)
+    at <anonymous> ([...]/node_modules/effect/dist/esm/internal/runtime.js:59:18)
+    at <anonymous> ([...]/node_modules/@effect/rpc/dist/esm/RpcClient.js:123:20)
+    at <anonymous> ([...]/node_modules/effect/dist/esm/internal/core.js:291:21)
+    at runLoop ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:1129:34)
+    at evaluateEffect ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:733:27)
+    at evaluateMessageWhileSuspended ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:708:16)
+    at drainQueueOnCurrentThread ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:486:85)
+    at run ([...]/node_modules/effect/dist/esm/internal/fiberRuntime.js:1156:10)
+    at starveInternal ([...]/node_modules/effect/dist/esm/Scheduler.js:68:15)
+    at processTicksAndRejections (native)
+    at RpcServer.TestValue
+```
 
-4. Push the schema to your database with drizzle-kit:
+### Scenario 2: HTTP Client does not Stream
 
-   ```bash
-   pnpm db push # npm run db push
-   ```
+The HTTP client fails to support stream functionality. Regardless of the input, the result is always an empty array (`[]`), even when sending simple structured data streams. This behavior can be verified on the webpage.
 
-   https://orm.drizzle.team/docs/migrations
+### Scenario 3: WebSocket immediately terminates
 
-5. Run the development server:
+The WebSocket connection terminates prematurely, before the server can respond or the client can transmit data.
 
-   ```bash
-   pnpm dev # npm run dev
-   ```
+Server console output shows:
 
-   The development server should be now running at [http://localhost:3000](http://localhost:3000).
+```
+[10:44:06.028] INFO (#11) http.span.1=9ms:
+All fibers interrupted without errors.
+http.status: 499
+http.method: GET
+http.url: /
+```
 
-## Issue watchlist
+Custom implementation of the `makeWebSocket` function without connection closing eliminates this error, but the server still fails to respond.
 
-- [React Compiler docs](https://react.dev/learn/react-compiler), [Working Group](https://github.com/reactwg/react-compiler/discussions) - React Compiler is still in beta. You can disable it in [app.config.ts](./app.config.ts#L15) if you prefer.
-- https://github.com/TanStack/router/discussions/2863 - TanStack Start is currently in beta and may still undergo major changes.
-- https://github.com/shadcn-ui/ui/discussions/6714 - We're using the `canary` version of shadcn/ui for Tailwind v4 support.
+Client-side console errors:
 
-## Auth
+Firefox:
+```
+Firefox can't establish a connection to the server at ws://localhost:3001/. Socket.ts:368:22
+The connection to ws://localhost:3001/ was interrupted while the page was loading. Socket.ts:368:22
+```
 
-Better Auth is currently configured for OAuth with GitHub, Google, and Discord, but can be easily modified to use other providers.
-
-If you want to use email/password authentication or change providers, update the [auth config](./src/lib/server/auth.ts#L36) and [signin page](./src/routes/signin.tsx) with your own UI. You can use [shadcn/ui login blocks](https://ui.shadcn.com/blocks/login) or [@daveyplate/better-auth-ui](https://better-auth-ui.com/) as a starting point.
-
-## Goodies
-
-#### Scripts
-
-These scripts in [package.json](./package.json#L5) use **pnpm** by default, but you can modify them to use your preferred package manager.
-
-- **`auth:generate`** - Regenerate the [auth db schema](./src/lib/server/schema/auth.schema.ts) if you've made changes to your Better Auth [config](./src/lib/server/auth.ts).
-- **`db`** - Run drizzle-kit commands. (e.g. `pnpm db generate` to generate a migration)
-- **`ui`** - The shadcn/ui CLI. (e.g. `pnpm ui add button` to add the button component)
-- **`format`** and **`lint`** - Run Prettier and ESLint.
-
-#### Utilities
-
-- [`auth-guard.ts`](./src/lib/middleware/auth-guard.ts) - Sample middleware for forcing authentication on server functions. ([see #5](https://github.com/dotnize/tanstarter/issues/5))
-- [`ThemeToggle.tsx`](./src/lib/components/ThemeToggle.tsx) - A simple component to toggle between light and dark mode. ([#7](https://github.com/dotnize/tanstarter/issues/7))
-
-## Building for production
-
-Read the [hosting docs](https://tanstack.com/start/latest/docs/framework/react/hosting) for information on how to deploy your TanStack Start app.
-
-## Acknowledgements
-
-- [nekochan0122/tanstack-boilerplate](https://github.com/nekochan0122/tanstack-boilerplate) - A batteries-included TanStack Start boilerplate that inspired some patterns in this template. If you're looking for a more feature-rich starter, check it out!
-- [AlexGaudon/tanstarter-better-auth](https://github.com/AlexGaudon/tanstarter-better-auth) for his own better-auth implementation.
+Chrome:
+```
+client.http.ts:32 WebSocket connection to 'ws://localhost:3001/' failed: WebSocket is closed before the connection is established.
+```
