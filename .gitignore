@@ -17,3 +17,4 @@ dist
 /api/
 /server/build
 /public/build
+.direnv/

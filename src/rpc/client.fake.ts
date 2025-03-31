@@ -13,12 +13,10 @@ const ServerRuntime = ManagedRuntime.make(ServerLayer);
 
 class ServerClient extends Effect.Service<ServerClient>()("ServerClient", {
   scoped: Effect.gen(function* () {
-    const rpc = yield* RpcTest.makeClient(Procedures).pipe(
-      Effect.provide(ProceduresLive),
-    );
-
+    const rpc = yield* RpcTest.makeClient(Procedures);
     return { rpc };
   }),
+  dependencies: [ProceduresLive],
   accessors: true,
 }) {}
 
