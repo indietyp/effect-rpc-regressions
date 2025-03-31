@@ -7,11 +7,7 @@ import { createRouter } from "./router";
 import { start } from "./rpc/server.websocket";
 
 Effect.runFork(
-  start.pipe(
-    Effect.scoped,
-    Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)),
-    Effect.provide(Logger.pretty),
-  ),
+  start.pipe(Effect.provide([Logger.minimumLogLevel(LogLevel.Debug), Logger.pretty])),
 );
 
 export default createStartHandler({

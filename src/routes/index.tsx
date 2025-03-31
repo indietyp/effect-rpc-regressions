@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
       queryKey: ["fake stream"],
       queryFn: () =>
         callFakePromise((client) =>
-          client.TestValue().pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray)),
+          client.TestStream().pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray)),
         ),
     });
   },
@@ -24,7 +24,13 @@ function Home() {
     queryKey: ["http stream"],
     queryFn: () =>
       callHttpPromise((client) =>
-        client.TestStream().pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray)),
+        client
+          .TestStream()
+          .pipe(
+            Stream.tap(Effect.log),
+            Stream.runCollect,
+            Effect.map(Chunk.toReadonlyArray),
+          ),
       ),
   });
 
